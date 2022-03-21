@@ -1,0 +1,1 @@
+g++ main.cpp -o main && rm -f data/con/*.vtk data/phi/*.vtk && ./main
