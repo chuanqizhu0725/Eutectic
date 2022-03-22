@@ -18,7 +18,7 @@ int nm = N - 1;
 int ndm = ND - 1;
 
 int nstep = 1001;
-int pstep = 200;
+int pstep = 100;
 
 double dx = 1.0e-7;
 double dtime = 4.0e-10;
@@ -26,21 +26,21 @@ double dtime = 4.0e-10;
 double gamma0 = 0.1;
 double delta = 5.0 * dx;
 
-double mobi = 4.0e-5;
+double mobi = 2.0e-5;
 
 double A0 = 8.0 * delta * gamma0 / PI / PI;
 double W0 = 4.0 * gamma0 / delta;
 double M0 = mobi * PI * PI / (8.0 * delta);
-double F10 = -2.0e6;
-double F20 = -2.0e6;
+double F10 = 1.5e6;
+double F20 = 1.5e6;
 
 double Ds = 0.1e-6;
-double Dl = 0.5e-5;
+double Dl = 0.2e-5;
 
-double temp = 1000.0; // K
+double temp = 600.0; // K
 double Te = 800.0;
 double ce = 0.4;
-double cl = 0.6;
+double cl = 0.4;
 
 double ml1 = -2000.0;
 double kap1 = 0.25;
@@ -48,7 +48,7 @@ double c01e = ce + (temp - Te) / ml1;
 double c1e = c01e * kap1;
 
 double ml2 = 2000.0;
-double kap2 = 1.5;
+double kap2 = 2.5;
 double c02e = ce + (temp - Te) / ml2;
 double c2e = c02e * kap2;
 
@@ -59,6 +59,11 @@ double cddtt, dev1_s, dev2_s, dev1_l, dev2_l;
 double con[ND][ND][ND], con_new[ND][ND][ND], con1[ND][ND][ND], con2[ND][ND][ND], con0[ND][ND][ND];
 
 double mij[N][N], aij[N][N], wij[N][N], fij[N][N];
+
+int anij[N][N];
+double thij[N][N];
+double vpij[N][N];
+double etaij[N][N];
 
 double phi[N][ND][ND][ND], phi_new[N][ND][ND][ND];
 
@@ -74,8 +79,31 @@ int ii, jj, kk;
 int n1, n2, n3;
 int istep;
 
-double pddtt, sum1;
+double astre = 0.05;
+double th, vp, eta;
+double thetax, thetay;
+double epsilon0;
 double termiikk, termjjkk;
+
+double phidx, phidy, phidz;
+double phidxx, phidyy, phidzz;
+double phidxy, phidxz, phidyz;
+double phiabs;
+
+double xxp, xyp, xzp, yxp, yyp, yzp, zxp, zyp, zzp;
+
+double phidxp, phidyp, phidzp;
+double phidxpx, phidypx, phidzpx;
+double phidxpy, phidypy, phidzpy;
+double phidxpz, phidypz, phidzpz;
+double ep, epdx, epdy, epdz;
+double term0;
+double termx, termx0, termx1, termx0dx, termx1dx;
+double termy, termy0, termy1, termy0dy, termy1dy;
+double termz, termz0, termz1, termz0dz, termz1dz;
+
+double pddtt, sum1;
+// double termiikk, termjjkk;
 
 double dF;
 
@@ -101,11 +129,20 @@ int main(void)
             wij[i][j] = W0;
             aij[i][j] = A0;
             mij[i][j] = M0;
+            anij[i][j] = 0;
+            thij[i][j] = 0.0;
+            vpij[i][j] = 0.0;
+            etaij[i][j] = 0.0;
+            if ((i == 0) || (j == 0))
+            {
+                anij[i][j] = 1;
+            }
             if (i == j)
             {
                 wij[i][j] = 0.0;
                 aij[i][j] = 0.0;
                 mij[i][j] = 0.0;
+                anij[i][j] = 0;
             }
         }
     }
@@ -118,17 +155,17 @@ int main(void)
             for (k = 0; k <= ndm; k++)
             {
 
-                // if (i <= ND / 8 && j < ND / 2)
-                // {
-                //     phi[1][i][j][k] = 1.0;
-                //     con1[i][j][k] = c1e;
-                //     phi[2][i][j][k] = 0.0;
-                //     con2[i][j][k] = c2e;
-                //     phi[0][i][j][k] = 0.0;
-                //     con0[i][j][k] = c01e;
-                // }
-                // else if (i <= ND / 8 && j >= ND / 2)
-                if (i * i + j * j + k * k < 400)
+                if (i <= ND / 8 && j < ND / 2)
+                // if ((i - ND / 2) * (i - ND / 2) + (j - ND / 2) * (j - ND / 2) + (k - ND / 2) * (k - ND / 2) < 49)
+                {
+                    phi[1][i][j][k] = 1.0;
+                    con1[i][j][k] = c1e;
+                    phi[2][i][j][k] = 0.0;
+                    con2[i][j][k] = c2e;
+                    phi[0][i][j][k] = 0.0;
+                    con0[i][j][k] = c01e;
+                }
+                else if (i <= ND / 8 && j >= ND / 2)
                 {
                     phi[2][i][j][k] = 1.0;
                     con2[i][j][k] = c2e;
@@ -425,11 +462,166 @@ start:;
                         {
                             kk = phiIdx[n3][i][j][k];
 
-                            termiikk = aij[ii][kk] * (phi[kk][ip][j][k] + phi[kk][im][j][k] + phi[kk][i][jp][k] + phi[kk][i][jm][k] + phi[kk][i][j][kp] + phi[kk][i][j][km] - 6.0 * phi[kk][i][j][k]) / (dx * dx);
+                            // calculate the interface normal and deirivatives of the phase field
+                            phidx = (phi[kk][ip][j][k] - phi[kk][im][j][k]) / 2.0 / dx;
+                            phidy = (phi[kk][i][jp][k] - phi[kk][i][jm][k]) / 2.0 / dx;
+                            phidz = (phi[kk][i][j][kp] - phi[kk][i][j][km]) / 2.0 / dx;
 
-                            termjjkk = aij[jj][kk] * (phi[kk][ip][j][k] + phi[kk][im][j][k] + phi[kk][i][jp][k] + phi[kk][i][jm][k] + phi[kk][i][j][kp] + phi[kk][i][j][km] - 6.0 * phi[kk][i][j][k]) / (dx * dx);
+                            phidxx = (phi[kk][ip][j][k] + phi[kk][im][j][k] - 2.0 * phi[kk][i][j][k]) / dx / dx;
+                            phidyy = (phi[kk][i][jp][k] + phi[kk][i][jm][k] - 2.0 * phi[kk][i][j][k]) / dx / dx;
+                            phidzz = (phi[kk][i][j][kp] + phi[kk][i][j][km] - 2.0 * phi[kk][i][j][k]) / dx / dx;
+
+                            phidxy = (phi[kk][ip][jp][k] + phi[kk][im][jm][k] - phi[kk][im][jp][k] - phi[kk][ip][jm][k]) / 4.0 / dx / dx;
+                            phidxz = (phi[kk][ip][j][kp] + phi[kk][im][j][km] - phi[kk][im][j][kp] - phi[kk][ip][j][km]) / 4.0 / dx / dx;
+                            phidyz = (phi[kk][i][jp][kp] + phi[kk][i][jm][km] - phi[kk][i][jm][kp] - phi[kk][i][jp][km]) / 4.0 / dx / dx;
+
+                            phiabs = phidx * phidx + phidy * phidy + phidz * phidz;
+
+                            if (anij[ii][kk] == 1 && phiabs != 0.0)
+                            {
+                                epsilon0 = sqrt(aij[ii][kk]);
+
+                                th = thij[ii][kk];
+                                vp = vpij[ii][kk];
+                                eta = etaij[ii][kk];
+
+                                xxp = cos(th) * cos(vp);
+                                yxp = sin(th) * cos(vp);
+                                zxp = sin(vp);
+                                xyp = -sin(th) * cos(eta) - cos(th) * sin(vp) * sin(eta);
+                                yyp = cos(th) * cos(eta) - sin(th) * sin(vp) * sin(eta);
+                                zyp = cos(vp) * sin(eta);
+                                xzp = sin(eta) * sin(th) - cos(eta) * cos(th) * sin(vp);
+                                yzp = -sin(eta) * cos(th) - cos(eta) * sin(th) * sin(vp);
+                                zzp = cos(eta) * cos(vp);
+
+                                phidxp = phidx * xxp + phidy * yxp + phidz * zxp;
+                                phidyp = phidx * xyp + phidy * yyp + phidz * zyp;
+                                phidzp = phidx * xzp + phidy * yzp + phidz * zzp;
+
+                                phidxpx = phidxx * xxp + phidxy * yxp + phidxz * zxp;
+                                phidypx = phidxx * xyp + phidxy * yyp + phidxz * zyp;
+                                phidzpx = phidxx * xzp + phidxy * yzp + phidxz * zzp;
+
+                                phidxpy = phidxy * xxp + phidyy * yxp + phidyz * zxp;
+                                phidypy = phidxy * xyp + phidyy * yyp + phidyz * zyp;
+                                phidzpy = phidxy * xzp + phidyy * yzp + phidyz * zzp;
+
+                                phidxpz = phidxz * xxp + phidyz * yxp + phidzz * zxp;
+                                phidypz = phidxz * xyp + phidyz * yyp + phidzz * zyp;
+                                phidzpz = phidxz * xzp + phidyz * yzp + phidzz * zzp;
+
+                                ep = epsilon0 * (1.0 - 3.0 * astre + 4.0 * astre * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 2.0));
+
+                                epdx = 16.0 * epsilon0 * astre * ((pow(phidxp, 3.0) * phidxpx + pow(phidyp, 3.0) * phidypx + pow(phidzp, 3.0) * phidzpx) / pow(phiabs, 2.0) - (phidx * phidxx + phidy * phidxy + phidz * phidxz) * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0));
+                                epdy = 16.0 * epsilon0 * astre * ((pow(phidxp, 3.0) * phidxpy + pow(phidyp, 3.0) * phidypy + pow(phidzp, 3.0) * phidzpy) / pow(phiabs, 2.0) - (phidx * phidxy + phidy * phidyy + phidz * phidyz) * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0));
+                                epdz = 16.0 * epsilon0 * astre * ((pow(phidxp, 3.0) * phidxpz + pow(phidyp, 3.0) * phidypz + pow(phidzp, 3.0) * phidzpz) / pow(phiabs, 2.0) - (phidx * phidxz + phidy * phidyz + phidz * phidzz) * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0));
+
+                                term0 = 2.0 * ep * epdx * phidx + phidxx * ep * ep + 2.0 * ep * epdy * phidy + phidyy * ep * ep + 2.0 * ep * epdz * phidz + phidzz * ep * ep;
+
+                                termx0 = (pow(phidxp, 3.0) * xxp + pow(phidyp, 3.0) * xyp + pow(phidzp, 3.0) * xzp) / phiabs;
+                                termy0 = (pow(phidxp, 3.0) * yxp + pow(phidyp, 3.0) * yyp + pow(phidzp, 3.0) * yzp) / phiabs;
+                                termz0 = (pow(phidxp, 3.0) * zxp + pow(phidyp, 3.0) * zyp + pow(phidzp, 3.0) * zzp) / phiabs;
+
+                                termx1 = (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) * phidx / pow(phiabs, 2.0);
+                                termy1 = (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) * phidy / pow(phiabs, 2.0);
+                                termz1 = (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) * phidz / pow(phiabs, 2.0);
+
+                                termx0dx = (3.0 * pow(phidxp, 2.0) * phidxpx * xxp + 3.0 * pow(phidyp, 2.0) * phidypx * xyp + 3.0 * pow(phidzp, 2.0) * phidzpx * xzp) / phiabs - (2.0 * phidx * phidxx + 2.0 * phidy * phidxy + 2.0 * phidz * phidxz) * (pow(phidxp, 3.0) * xxp + pow(phidyp, 3.0) * xyp + pow(phidzp, 3.0) * xzp) / pow(phiabs, 2.0);
+                                termy0dy = (3.0 * pow(phidxp, 2.0) * phidxpy * yxp + 3.0 * pow(phidyp, 2.0) * phidypy * yyp + 3.0 * pow(phidzp, 2.0) * phidzpy * yzp) / phiabs - (2.0 * phidx * phidxy + 2.0 * phidy * phidyy + 2.0 * phidz * phidyz) * (pow(phidxp, 3.0) * yxp + pow(phidyp, 3.0) * yyp + pow(phidzp, 3.0) * yzp) / pow(phiabs, 2.0);
+                                termz0dz = (3.0 * pow(phidxp, 2.0) * phidxpz * zxp + 3.0 * pow(phidyp, 2.0) * phidypz * zyp + 3.0 * pow(phidzp, 2.0) * phidzpz * zzp) / phiabs - (2.0 * phidx * phidxz + 2.0 * phidy * phidyz + 2.0 * phidz * phidzz) * (pow(phidxp, 3.0) * zxp + pow(phidyp, 3.0) * zyp + pow(phidzp, 3.0) * zzp) / pow(phiabs, 2.0);
+
+                                termx1dx = ((phidxx * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) + phidx * (4.0 * pow(phidxp, 3.0) * phidxpx + 4.0 * pow(phidyp, 3.0) * phidypx + 4.0 * pow(phidzp, 3.0) * phidzpx))) / pow(phiabs, 2.0) - 4.0 * (phidx * phidxx + phidy * phidxy + phidz * phidxz) * phidx * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0);
+                                termy1dy = ((phidyy * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) + phidy * (4.0 * pow(phidxp, 3.0) * phidxpy + 4.0 * pow(phidyp, 3.0) * phidypy + 4.0 * pow(phidzp, 3.0) * phidzpy))) / pow(phiabs, 2.0) - 4.0 * (phidx * phidxy + phidy * phidyy + phidz * phidyz) * phidy * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0);
+                                termz1dz = ((phidzz * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) + phidz * (4.0 * pow(phidxp, 3.0) * phidxpz + 4.0 * pow(phidyp, 3.0) * phidypz + 4.0 * pow(phidzp, 3.0) * phidzpz))) / pow(phiabs, 2.0) - 4.0 * (phidx * phidxz + phidy * phidyz + phidz * phidzz) * phidz * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0);
+
+                                termx = 16.0 * epsilon0 * astre * (epdx * (termx0 - termx1) + ep * (termx0dx - termx1dx));
+                                termy = 16.0 * epsilon0 * astre * (epdy * (termy0 - termy1) + ep * (termy0dy - termy1dy));
+                                termz = 16.0 * epsilon0 * astre * (epdz * (termz0 - termz1) + ep * (termz0dz - termz1dz));
+
+                                termiikk = term0 + termx + termy + termz;
+                            }
+                            else
+                            {
+                                termiikk = aij[ii][kk] * (phidxx + phidyy + phidzz);
+                            }
+
+                            if (anij[jj][kk] == 1 && phiabs != 0.0)
+                            {
+                                epsilon0 = sqrt(aij[jj][kk]);
+
+                                th = thij[jj][kk];
+                                vp = vpij[jj][kk];
+                                eta = etaij[jj][kk];
+
+                                xxp = cos(th) * cos(vp);
+                                yxp = sin(th) * cos(vp);
+                                zxp = sin(vp);
+                                xyp = -sin(th) * cos(eta) - cos(th) * sin(vp) * sin(eta);
+                                yyp = cos(th) * cos(eta) - sin(th) * sin(vp) * sin(eta);
+                                zyp = cos(vp) * sin(eta);
+                                xzp = sin(eta) * sin(th) - cos(eta) * cos(th) * sin(vp);
+                                yzp = -sin(eta) * cos(th) - cos(eta) * sin(th) * sin(vp);
+                                zzp = cos(eta) * cos(vp);
+
+                                phidxp = phidx * xxp + phidy * yxp + phidz * zxp;
+                                phidyp = phidx * xyp + phidy * yyp + phidz * zyp;
+                                phidzp = phidx * xzp + phidy * yzp + phidz * zzp;
+
+                                phidxpx = phidxx * xxp + phidxy * yxp + phidxz * zxp;
+                                phidypx = phidxx * xyp + phidxy * yyp + phidxz * zyp;
+                                phidzpx = phidxx * xzp + phidxy * yzp + phidxz * zzp;
+
+                                phidxpy = phidxy * xxp + phidyy * yxp + phidyz * zxp;
+                                phidypy = phidxy * xyp + phidyy * yyp + phidyz * zyp;
+                                phidzpy = phidxy * xzp + phidyy * yzp + phidyz * zzp;
+
+                                phidxpz = phidxz * xxp + phidyz * yxp + phidzz * zxp;
+                                phidypz = phidxz * xyp + phidyz * yyp + phidzz * zyp;
+                                phidzpz = phidxz * xzp + phidyz * yzp + phidzz * zzp;
+
+                                ep = epsilon0 * (1.0 - 3.0 * astre + 4.0 * astre * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 2.0));
+
+                                epdx = 16.0 * epsilon0 * astre * ((pow(phidxp, 3.0) * phidxpx + pow(phidyp, 3.0) * phidypx + pow(phidzp, 3.0) * phidzpx) / pow(phiabs, 2.0) - (phidx * phidxx + phidy * phidxy + phidz * phidxz) * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0));
+                                epdy = 16.0 * epsilon0 * astre * ((pow(phidxp, 3.0) * phidxpy + pow(phidyp, 3.0) * phidypy + pow(phidzp, 3.0) * phidzpy) / pow(phiabs, 2.0) - (phidx * phidxy + phidy * phidyy + phidz * phidyz) * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0));
+                                epdz = 16.0 * epsilon0 * astre * ((pow(phidxp, 3.0) * phidxpz + pow(phidyp, 3.0) * phidypz + pow(phidzp, 3.0) * phidzpz) / pow(phiabs, 2.0) - (phidx * phidxz + phidy * phidyz + phidz * phidzz) * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0));
+
+                                term0 = 2.0 * ep * epdx * phidx + phidxx * ep * ep + 2.0 * ep * epdy * phidy + phidyy * ep * ep + 2.0 * ep * epdz * phidz + phidzz * ep * ep;
+
+                                termx0 = (pow(phidxp, 3.0) * xxp + pow(phidyp, 3.0) * xyp + pow(phidzp, 3.0) * xzp) / phiabs;
+                                termy0 = (pow(phidxp, 3.0) * yxp + pow(phidyp, 3.0) * yyp + pow(phidzp, 3.0) * yzp) / phiabs;
+                                termz0 = (pow(phidxp, 3.0) * zxp + pow(phidyp, 3.0) * zyp + pow(phidzp, 3.0) * zzp) / phiabs;
+
+                                termx1 = (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) * phidx / pow(phiabs, 2.0);
+                                termy1 = (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) * phidy / pow(phiabs, 2.0);
+                                termz1 = (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) * phidz / pow(phiabs, 2.0);
+
+                                termx0dx = (3.0 * pow(phidxp, 2.0) * phidxpx * xxp + 3.0 * pow(phidyp, 2.0) * phidypx * xyp + 3.0 * pow(phidzp, 2.0) * phidzpx * xzp) / phiabs - (2.0 * phidx * phidxx + 2.0 * phidy * phidxy + 2.0 * phidz * phidxz) * (pow(phidxp, 3.0) * xxp + pow(phidyp, 3.0) * xyp + pow(phidzp, 3.0) * xzp) / pow(phiabs, 2.0);
+                                termy0dy = (3.0 * pow(phidxp, 2.0) * phidxpy * yxp + 3.0 * pow(phidyp, 2.0) * phidypy * yyp + 3.0 * pow(phidzp, 2.0) * phidzpy * yzp) / phiabs - (2.0 * phidx * phidxy + 2.0 * phidy * phidyy + 2.0 * phidz * phidyz) * (pow(phidxp, 3.0) * yxp + pow(phidyp, 3.0) * yyp + pow(phidzp, 3.0) * yzp) / pow(phiabs, 2.0);
+                                termz0dz = (3.0 * pow(phidxp, 2.0) * phidxpz * zxp + 3.0 * pow(phidyp, 2.0) * phidypz * zyp + 3.0 * pow(phidzp, 2.0) * phidzpz * zzp) / phiabs - (2.0 * phidx * phidxz + 2.0 * phidy * phidyz + 2.0 * phidz * phidzz) * (pow(phidxp, 3.0) * zxp + pow(phidyp, 3.0) * zyp + pow(phidzp, 3.0) * zzp) / pow(phiabs, 2.0);
+
+                                termx1dx = ((phidxx * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) + phidx * (4.0 * pow(phidxp, 3.0) * phidxpx + 4.0 * pow(phidyp, 3.0) * phidypx + 4.0 * pow(phidzp, 3.0) * phidzpx))) / pow(phiabs, 2.0) - 4.0 * (phidx * phidxx + phidy * phidxy + phidz * phidxz) * phidx * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0);
+                                termy1dy = ((phidyy * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) + phidy * (4.0 * pow(phidxp, 3.0) * phidxpy + 4.0 * pow(phidyp, 3.0) * phidypy + 4.0 * pow(phidzp, 3.0) * phidzpy))) / pow(phiabs, 2.0) - 4.0 * (phidx * phidxy + phidy * phidyy + phidz * phidyz) * phidy * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0);
+                                termz1dz = ((phidzz * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) + phidz * (4.0 * pow(phidxp, 3.0) * phidxpz + 4.0 * pow(phidyp, 3.0) * phidypz + 4.0 * pow(phidzp, 3.0) * phidzpz))) / pow(phiabs, 2.0) - 4.0 * (phidx * phidxz + phidy * phidyz + phidz * phidzz) * phidz * (pow(phidxp, 4.0) + pow(phidyp, 4.0) + pow(phidzp, 4.0)) / pow(phiabs, 3.0);
+
+                                termx = 16.0 * epsilon0 * astre * (epdx * (termx0 - termx1) + ep * (termx0dx - termx1dx));
+                                termy = 16.0 * epsilon0 * astre * (epdy * (termy0 - termy1) + ep * (termy0dy - termy1dy));
+                                termz = 16.0 * epsilon0 * astre * (epdz * (termz0 - termz1) + ep * (termz0dz - termz1dz));
+
+                                termjjkk = term0 + termx + termy + termz;
+                            }
+                            else
+                            {
+                                termjjkk = aij[jj][kk] * (phidxx + phidyy + phidzz);
+                            }
 
                             sum1 += 0.5 * (termiikk - termjjkk) + (wij[ii][kk] - wij[jj][kk]) * phi[kk][i][j][k];
+
+                            // termiikk = aij[ii][kk] * (phi[kk][ip][j][k] + phi[kk][im][j][k] + phi[kk][i][jp][k] + phi[kk][i][jm][k] + phi[kk][i][j][kp] + phi[kk][i][j][km] - 6.0 * phi[kk][i][j][k]) / (dx * dx);
+
+                            // termjjkk = aij[jj][kk] * (phi[kk][ip][j][k] + phi[kk][im][j][k] + phi[kk][i][jp][k] + phi[kk][i][jm][k] + phi[kk][i][j][kp] + phi[kk][i][j][km] - 6.0 * phi[kk][i][j][k]) / (dx * dx);
+
+                            // sum1 += 0.5 * (termiikk - termjjkk) + (wij[ii][kk] - wij[jj][kk]) * phi[kk][i][j][k];
                         }
                         if (ii == 1 && jj == 0)
                         {
