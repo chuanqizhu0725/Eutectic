@@ -11,14 +11,18 @@
 using namespace std;
 
 #define N 3
-#define ND 50
+#define NDX 64
+#define NDY 64
+#define NDZ 1
 #define PI 3.14159
 
 int nm = N - 1;
-int ndm = ND - 1;
+int ndmx = NDX - 1;
+int ndmy = NDY - 1;
+int ndmz = NDZ - 1;
 
 int nstep = 1001;
-int pstep = 100;
+int pstep = 200;
 
 double dx = 1.0e-7;
 double dtime = 4.0e-10;
@@ -26,7 +30,7 @@ double dtime = 4.0e-10;
 double gamma0 = 0.1;
 double delta = 5.0 * dx;
 
-double mobi = 2.0e-5;
+double mobi = 4.0e-5;
 
 double A0 = 8.0 * delta * gamma0 / PI / PI;
 double W0 = 4.0 * gamma0 / delta;
@@ -35,7 +39,7 @@ double F10 = 1.5e6;
 double F20 = 1.5e6;
 
 double Ds = 0.1e-6;
-double Dl = 0.2e-5;
+double Dl = 0.5e-5;
 
 double temp = 600.0; // K
 double Te = 800.0;
@@ -56,7 +60,7 @@ double c0, dc0;
 
 double cddtt, dev1_s, dev2_s, dev1_l, dev2_l;
 
-double con[ND][ND][ND], con_new[ND][ND][ND], con1[ND][ND][ND], con2[ND][ND][ND], con0[ND][ND][ND];
+double con[NDX][NDY][NDZ], con_new[NDX][NDY][NDZ], con1[NDX][NDY][NDZ], con2[NDX][NDY][NDZ], con0[NDX][NDY][NDZ];
 
 double mij[N][N], aij[N][N], wij[N][N], fij[N][N];
 
@@ -65,14 +69,14 @@ double thij[N][N];
 double vpij[N][N];
 double etaij[N][N];
 
-double phi[N][ND][ND][ND], phi_new[N][ND][ND][ND];
+double phi[N][NDX][NDY][NDZ], phi_new[N][NDX][NDY][NDZ];
 
 double phis_ijk, phis_ipjk, phis_imjk, phis_ijpk, phis_ijmk, phis_ijkp, phis_ijkm;
 double cons_ijk, cons_ipjk, cons_imjk, cons_ijpk, cons_ijmk, cons_ijkp, cons_ijkm;
 
 int phinum;
-int phiNum[ND][ND][ND];
-int phiIdx[N + 1][ND][ND][ND];
+int phiNum[NDX][NDY][NDZ];
+int phiIdx[N + 1][NDX][NDY][NDZ];
 
 int i, j, im, ip, jm, jp, k, km, kp, l;
 int ii, jj, kk;
@@ -117,7 +121,7 @@ int main(void)
     cout << "phase field stability number is: " << dtime / dx / dx * mobi * gamma0 << endl;
     cout << "unpper limit of driving force is: " << delta / dtime / mobi / PI << endl;
     cout << "The dimension is" << endl;
-    cout << "***************   " << ND * dx << " m"
+    cout << "***************   " << NDX * dx << " m"
          << "    ***************" << endl;
     cout << "**                                          **" << endl;
     cout << "**********************************************" << endl;
@@ -148,14 +152,14 @@ int main(void)
     }
 
     sum1 = 0.0;
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
 
-                if (i <= ND / 8 && j < ND / 2)
+                if (i <= NDX / 8 && j < NDY / 2)
                 // if ((i - ND / 2) * (i - ND / 2) + (j - ND / 2) * (j - ND / 2) + (k - ND / 2) * (k - ND / 2) < 49)
                 {
                     phi[1][i][j][k] = 1.0;
@@ -165,7 +169,7 @@ int main(void)
                     phi[0][i][j][k] = 0.0;
                     con0[i][j][k] = c01e;
                 }
-                else if (i <= ND / 8 && j >= ND / 2)
+                else if (i <= NDX / 8 && j >= NDY / 2)
                 {
                     phi[2][i][j][k] = 1.0;
                     con2[i][j][k] = c2e;
@@ -189,7 +193,7 @@ int main(void)
             }
         }
     }
-    c0 = sum1 / ND / ND / ND;
+    c0 = sum1 / NDX / NDY / NDZ;
     cout << "nominal concentration is: " << c0 << endl;
 
 start:;
@@ -200,24 +204,24 @@ start:;
         cout << istep << " steps(" << istep * dtime << " seconds) has done!" << endl;
 
         sum1 = 0.0;
-        for (i = 0; i <= ndm; i++)
+        for (i = 0; i <= ndmx; i++)
         {
-            for (j = 0; j <= ndm; j++)
+            for (j = 0; j <= ndmy; j++)
             {
-                for (k = 0; k <= ndm; k++)
+                for (k = 0; k <= ndmz; k++)
                 {
                     sum1 += con[i][j][k];
                 }
             }
         }
-        cout << "nominal concentration is: " << sum1 / ND / ND / ND << endl;
+        cout << "nominal concentration is: " << sum1 / NDX / NDY / NDZ << endl;
     }
 
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 ip = i + 1;
                 im = i - 1;
@@ -225,29 +229,29 @@ start:;
                 jm = j - 1;
                 kp = k + 1;
                 km = k - 1;
-                if (i == ndm)
+                if (i == ndmx)
                 {
                     ip = 0;
                 }
                 if (i == 0)
                 {
-                    im = ndm;
+                    im = ndmx;
                 }
-                if (j == ndm)
+                if (j == ndmy)
                 {
                     jp = 0;
                 }
                 if (j == 0)
                 {
-                    jm = ndm;
+                    jm = ndmy;
                 }
-                if (k == ndm)
+                if (k == ndmz)
                 {
                     kp = 0;
                 }
                 if (k == 0)
                 {
-                    km = ndm;
+                    km = ndmz;
                 }
 
                 phinum = 0;
@@ -271,11 +275,11 @@ start:;
     }
 
     // Calculate the concentration field in solid and liqud phase based on local concentration and equilibrium rule.
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 con1[i][j][k] = c1e;
                 con2[i][j][k] = c2e;
@@ -304,11 +308,11 @@ start:;
     }
 
     // Evolution Equation of Concentration field
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 ip = i + 1;
                 im = i - 1;
@@ -316,29 +320,29 @@ start:;
                 jm = j - 1;
                 kp = k + 1;
                 km = k - 1;
-                if (i == ndm)
+                if (i == ndmx)
                 {
                     ip = 0;
                 }
                 if (i == 0)
                 {
-                    im = ndm;
+                    im = ndmx;
                 }
-                if (j == ndm)
+                if (j == ndmy)
                 {
                     jp = 0;
                 }
                 if (j == 0)
                 {
-                    jm = ndm;
+                    jm = ndmy;
                 }
-                if (k == ndm)
+                if (k == ndmz)
                 {
                     kp = 0;
                 }
                 if (k == 0)
                 {
-                    km = ndm;
+                    km = ndmz;
                 }
 
                 phis_ijk = phi[1][i][j][k] + phi[2][i][j][k];
@@ -369,11 +373,11 @@ start:;
         }
     }
 
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 con[i][j][k] = con_new[i][j][k];
             }
@@ -381,23 +385,23 @@ start:;
     }
 
     sum1 = 0.0;
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 sum1 += con[i][j][k];
             }
         }
     }
-    dc0 = sum1 / ND / ND / ND - c0;
+    dc0 = sum1 / NDX / NDY / NDZ - c0;
 
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 con[i][j][k] = con[i][j][k] - dc0;
                 if (con[i][j][k] > 1.0)
@@ -413,11 +417,11 @@ start:;
     }
 
     // Evolution Equation of Phase Fields
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 ip = i + 1;
                 im = i - 1;
@@ -425,29 +429,29 @@ start:;
                 jm = j - 1;
                 kp = k + 1;
                 km = k - 1;
-                if (i == ndm)
+                if (i == ndmx)
                 {
                     ip = 0;
                 }
                 if (i == 0)
                 {
-                    im = ndm;
+                    im = ndmx;
                 }
-                if (j == ndm)
+                if (j == ndmy)
                 {
                     jp = 0;
                 }
                 if (j == 0)
                 {
-                    jm = ndm;
+                    jm = ndmy;
                 }
-                if (k == ndm)
+                if (k == ndmz)
                 {
                     kp = 0;
                 }
                 if (k == 0)
                 {
-                    km = ndm;
+                    km = ndmz;
                 }
 
                 for (n1 = 1; n1 <= phiNum[i][j][k]; n1++)
@@ -659,11 +663,11 @@ start:;
         }
     }
 
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 for (l = 0; l <= nm; l++)
                 {
@@ -673,11 +677,11 @@ start:;
         }
     }
 
-    for (i = 0; i <= ndm; i++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (k = 0; k <= ndmz; k++)
             {
                 sum1 = 0.0;
                 for (l = 0; l <= nm; l++)
@@ -713,19 +717,19 @@ void datasave(int step)
     fprintf(stream, "phi_%e.vtk\n", step);
     fprintf(stream, "ASCII\n");
     fprintf(stream, "DATASET STRUCTURED_POINTS\n");
-    fprintf(stream, "DIMENSIONS %d %d %d\n", ND, ND, ND);
+    fprintf(stream, "DIMENSIONS %d %d %d\n", NDX, NDY, NDZ);
     fprintf(stream, "ORIGIN 0.0 0.0 0.0\n");
     fprintf(stream, "ASPECT_RATIO 1.0 1.0 1.0\n");
     fprintf(stream, "\n");
-    fprintf(stream, "POINT_DATA %d\n", ND * ND * ND);
+    fprintf(stream, "POINT_DATA %d\n", NDX * NDY * NDZ);
     fprintf(stream, "SCALARS scalars float\n");
     fprintf(stream, "LOOKUP_TABLE default\n");
 
-    for (i = 0; i <= ndm; i++)
+    for (k = 0; k <= ndmz; k++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (i = 0; i <= ndmx; i++)
             {
                 fprintf(stream, "%e\n", phi[0][i][j][k]);
             }
@@ -742,19 +746,19 @@ void datasave(int step)
     fprintf(streamc, "con_%e.vtk\n", step);
     fprintf(streamc, "ASCII\n");
     fprintf(streamc, "DATASET STRUCTURED_POINTS\n");
-    fprintf(streamc, "DIMENSIONS %d %d %d\n", ND, ND, ND);
+    fprintf(streamc, "DIMENSIONS %d %d %d\n", NDX, NDY, NDZ);
     fprintf(streamc, "ORIGIN 0.0 0.0 0.0\n");
     fprintf(streamc, "ASPECT_RATIO 1.0 1.0 1.0\n");
     fprintf(streamc, "\n");
-    fprintf(streamc, "POINT_DATA %d\n", ND * ND * ND);
+    fprintf(streamc, "POINT_DATA %d\n", NDX * NDY * NDZ);
     fprintf(streamc, "SCALARS scalars float\n");
     fprintf(streamc, "LOOKUP_TABLE default\n");
 
-    for (i = 0; i <= ndm; i++)
+    for (k = 0; k <= ndmz; k++)
     {
-        for (j = 0; j <= ndm; j++)
+        for (j = 0; j <= ndmy; j++)
         {
-            for (k = 0; k <= ndm; k++)
+            for (i = 0; i <= ndmx; i++)
             {
                 fprintf(streamc, "%e\n", con[i][j][k]);
             }
